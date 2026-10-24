@@ -114,14 +114,16 @@ func (c *Config) ShouldIgnore(vulnID string) (bool, *IgnoreEntry) {
 
 func (c *Config) filterPackageVersionEntries(pkg *extractor.Package, condition func(PackageOverrideEntry) bool) (bool, PackageOverrideEntry) {
 	index := slices.IndexFunc(c.PackageOverrides, func(e PackageOverrideEntry) bool {
-		return e.matches(pkg) && condition(e)
+		// An expired entry behaves as if it were absent, so a later
+		// still-active entry for the same package can still match.
+		return e.matches(pkg) && condition(e) && shouldIgnoreTimestamp(e.EffectiveUntil)
 	})
 	if index == -1 {
 		return false, PackageOverrideEntry{}
 	}
 	ignoredLine := c.PackageOverrides[index]
 
-	return shouldIgnoreTimestamp(ignoredLine.EffectiveUntil), ignoredLine
+	return true, ignoredLine
 }
 
 // ShouldIgnorePackage determines if the given package should be ignored based on override entries in the config

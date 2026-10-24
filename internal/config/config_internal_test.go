@@ -858,6 +858,57 @@ func TestConfig_ShouldIgnorePackage(t *testing.T) {
 			wantOk:    false,
 			wantEntry: PackageOverrideEntry{},
 		},
+		// -------------------------------------------------------------------------
+		{
+			name: "Expired_entry_does_not_apply",
+			config: Config{
+				PackageOverrides: []PackageOverrideEntry{
+					{
+						Name:           "lib1",
+						Version:        "1.0.0",
+						Ignore:         true,
+						EffectiveUntil: time.Now().Add(-24 * time.Hour).Round(time.Second),
+						Reason:         "expired temporary override",
+					},
+				},
+			},
+			args: &extractor.Package{
+				Name:    "lib1",
+				Version: "1.0.0",
+			},
+			wantOk:    false,
+			wantEntry: PackageOverrideEntry{},
+		},
+		// -------------------------------------------------------------------------
+		{
+			name: "Expired_entry_does_not_shadow_a_later_active_entry",
+			config: Config{
+				PackageOverrides: []PackageOverrideEntry{
+					{
+						Name:           "lib1",
+						Version:        "1.0.0",
+						Ignore:         true,
+						EffectiveUntil: time.Now().Add(-24 * time.Hour).Round(time.Second),
+						Reason:         "expired temporary override",
+					},
+					{
+						Name:   "lib1",
+						Ignore: true,
+						Reason: "vendored and patched, never report",
+					},
+				},
+			},
+			args: &extractor.Package{
+				Name:    "lib1",
+				Version: "1.0.0",
+			},
+			wantOk: true,
+			wantEntry: PackageOverrideEntry{
+				Name:   "lib1",
+				Ignore: true,
+				Reason: "vendored and patched, never report",
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -1173,6 +1224,37 @@ func TestConfig_ShouldIgnorePackageVulnerabilities(t *testing.T) {
 			},
 			wantOk: true,
 		},
+		{
+			name: "Expired_entry_does_not_shadow_a_later_active_entry",
+			config: Config{
+				PackageOverrides: []PackageOverrideEntry{
+					{
+						Name:      "lib1",
+						Version:   "1.0.0",
+						Ecosystem: "Go",
+						Vulnerability: Vulnerability{
+							Ignore: true,
+						},
+						EffectiveUntil: time.Now().Add(-24 * time.Hour).Round(time.Second),
+						Reason:         "expired temporary override",
+					},
+					{
+						Name:      "lib1",
+						Ecosystem: "Go",
+						Vulnerability: Vulnerability{
+							Ignore: true,
+						},
+						Reason: "still active",
+					},
+				},
+			},
+			args: &extractor.Package{
+				Name:     "lib1",
+				Version:  "1.0.0",
+				PURLType: purl.TypeGolang,
+			},
+			wantOk: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -1361,6 +1443,45 @@ func TestConfig_ShouldOverridePackageLicense(t *testing.T) {
 					Ignore: true,
 				},
 				Reason: "abc",
+			},
+		},
+		{
+			name: "Expired_entry_does_not_shadow_a_later_active_entry",
+			config: Config{
+				PackageOverrides: []PackageOverrideEntry{
+					{
+						Name:      "lib1",
+						Version:   "1.0.0",
+						Ecosystem: "Go",
+						License: License{
+							Override: []string{"expired-license"},
+						},
+						EffectiveUntil: time.Now().Add(-24 * time.Hour).Round(time.Second),
+						Reason:         "expired temporary override",
+					},
+					{
+						Name:      "lib1",
+						Ecosystem: "Go",
+						License: License{
+							Override: []string{"mit"},
+						},
+						Reason: "still active",
+					},
+				},
+			},
+			args: &extractor.Package{
+				Name:     "lib1",
+				Version:  "1.0.0",
+				PURLType: purl.TypeGolang,
+			},
+			wantOk: true,
+			wantEntry: PackageOverrideEntry{
+				Name:      "lib1",
+				Ecosystem: "Go",
+				License: License{
+					Override: []string{"mit"},
+				},
+				Reason: "still active",
 			},
 		},
 	}
